@@ -66,7 +66,7 @@ class TireModel:
         Parameters:
         -----------
         aero_df : pd.DataFrame
-            DataFrame from AeroModel containing 'Fz_Downforce_N', 'a_x_ms2', and 'a_y_ms2'.
+            DataFrame from AeroModel containing 'Fz_Downforce_N', acceleration channels, etc.
 
         Returns:
         --------
@@ -75,9 +75,25 @@ class TireModel:
         """
         df = aero_df.copy()
 
-        # Extract kinematic acceleration channels
-        ax = df['a_x_ms2'].values if 'a_x_ms2' in df.columns else np.zeros(len(df))
-        ay = df['a_y_ms2'].values if 'a_y_ms2' in df.columns else np.zeros(len(df))
+        # Robust extraction of acceleration channels (m/s^2)
+        if 'a_x_ms2' in df.columns:
+            ax = df['a_x_ms2'].values
+        elif 'a_x' in df.columns:
+            ax = df['a_x'].values
+        elif 'a_x_g' in df.columns:
+            ax = df['a_x_g'].values * self.g
+        else:
+            ax = np.zeros(len(df))
+
+        if 'a_y_ms2' in df.columns:
+            ay = df['a_y_ms2'].values
+        elif 'a_y' in df.columns:
+            ay = df['a_y'].values
+        elif 'a_y_g' in df.columns:
+            ay = df['a_y_g'].values * self.g
+        else:
+            ay = np.zeros(len(df))
+
         fz_downforce = df['Fz_Downforce_N'].values
 
         # Compute vertical loads and planar forces
@@ -128,4 +144,16 @@ if __name__ == "__main__":
     print("\n==========================================")
     print(" TIRE MODEL SUCCESSFUL")
     print("==========================================")
-    print(tire_df[['Distance', 'Speed', 'a_x_g', 'a_y_g', 'Fz_Total_N', 'F_xy_InPlane_N', 'Mu_Utilized']].head(10))
+    
+    # Dynamic selection of columns present in DataFrame for printing
+    cols_to_show = ['Distance', 'Speed', 'Fz_Total_N', 'F_xy_InPlane_N', 'Mu_Utilized']
+    for ax_col in ['a_x_ms2', 'a_x_g', 'a_x']:
+        if ax_col in tire_df.columns:
+            cols_to_show.insert(2, ax_col)
+            break
+    for ay_col in ['a_y_ms2', 'a_y_g', 'a_y']:
+        if ay_col in tire_df.columns:
+            cols_to_show.insert(3, ay_col)
+            break
+
+    print(tire_df[cols_to_show].head(10))
