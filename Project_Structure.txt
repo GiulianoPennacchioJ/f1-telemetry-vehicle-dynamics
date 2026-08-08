@@ -1,0 +1,31 @@
+f1-telemetry-vehicle-dynamics/
+│
+├── core/                         # DATA PIPELINE & KINEMATICS
+│   ├── __init__.py
+│   ├── data_loader.py            # FastF1 interface, session/lap extraction, caching
+│   ├── spatial_resampler.py      # Time-to-space transformation (Δs = 1.0 m grid)
+│   └── signal_processing.py      # Savitzky-Golay filtering, d/ds derivatives, g-forces (a_x, a_y)
+│
+├── physics/                      # VEHICLE DYNAMICS & AERODYNAMICS
+│   ├── __init__.py
+│   ├── aero_model.py             # Aerodynamic forces (Fz_aero, Fx_drag), downforce vs. speed
+│   ├── tire_model.py             # Vertical load distribution (Fz_total) & friction utilization (μ_util)
+│   ├── gg_diagram.py             # G-G performance envelope extraction and boundary filtering
+│   ├── ers_analyzer.py           # 2025 ERS deployment/harvesting logic (MGU-K 120 kW limit, MGU-H)
+│   └── drs_analyzer.py           # DRS delta analysis (drag reduction, delta V, detection zones)
+│
+├── reports/                      # ADVANCED METRICS & DELTA COMPARISON
+│   ├── __init__.py
+│   ├── telemetry_comparator.py   # Driver vs. Driver delta analysis (Δv, Δt, throttle/brake trace)
+│   └── lap_report_generator.py   # Automated PDF/HTML executive report synthesis
+│
+├── config/                       # SIMULATION & VEHICLE PARAMETERS
+│   └── car_parameters.json       # F1 2025 constants (mass, A, Cd, Cl, max MGU-K power 120kW, etc.)
+│
+├── tests/                        # INTEGRATION & UNIT TESTS
+│   ├── test_kinematics.py
+│   └── test_physics.py
+│
+├── .fastf1_cache/                # FastF1 local cache directory
+├── requirements.txt              # Dependency specifications
+└── main.py                       # CLI Entry point & end-to-end pipeline execution
