@@ -1,0 +1,24 @@
+{
+  "vehicle": {
+    "mass_kg": 798.0,
+    "frontal_area_m2": 1.60,
+    "air_density_kg_m3": 1.225,
+    "gravity_m_s2": 9.81
+  },
+  "aerodynamics": {
+    "cl_base": 3.20,
+    "cd_base_drs_closed": 1.10,
+    "cd_drs_open": 0.82,
+    "drs_drag_reduction_pct": 25.4
+  },
+  "powertrain_2025": {
+    "max_ice_power_kw": 630.0,
+    "max_mguk_power_kw": 120.0,
+    "max_mguk_torque_nm": 200.0,
+    "mguk_harvest_limit_mj_lap": 2.0
+  },
+  "tires": {
+    "peak_friction_coefficient_mu": 1.70,
+    "mass_distribution_rear_pct": 54.5
+  }
+}
