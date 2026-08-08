@@ -18,7 +18,9 @@ f1-telemetry-vehicle-dynamics/
 │   ├── __init__.py
 │   ├── telemetry_comparator.py   # Driver vs. Driver delta analysis (Δv, Δt, throttle/brake trace)
 │   └── lap_report_generator.py   # Automated PDF/HTML executive report synthesis
-│
+│   └── efficiency_index.py       # Efficiency index analysis 
+|   
+|
 ├── config/                       # SIMULATION & VEHICLE PARAMETERS
 │   └── car_parameters.json       # F1 2025 constants (mass, A, Cd, Cl, max MGU-K power 120kW, etc.)
 │
