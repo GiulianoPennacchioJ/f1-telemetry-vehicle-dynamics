@@ -78,21 +78,14 @@ class LapReportGenerator:
         return save_path
 
     def generate_track_dominance_map(self, comp_df: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "track_dominance_map.png") -> str:
-        x_col = 'X' if 'X' in comp_df.columns else f'X_{ref_name}'
-        y_col = 'Y' if 'Y' in comp_df.columns else f'Y_{ref_name}'
-
-        if x_col not in comp_df.columns or y_col not in comp_df.columns:
-            logging.warning(f"GPS coordinates ({x_col}, {y_col}) not found in DataFrame. Skipping Track Dominance Map generation.")
+        if 'X' not in comp_df.columns or 'Y' not in comp_df.columns:
+            logging.warning("GPS coordinates (X, Y) not found in comp_df. Skipping Track Dominance Map generation.")
             return ""
 
-        x = comp_df[x_col].values
-        y = comp_df[y_col].values
+        x = comp_df['X'].values
+        y = comp_df['Y'].values
 
-        delta_v_col = 'Delta_Speed_kmh' if 'Delta_Speed_kmh' in comp_df.columns else f'Speed_Delta_{ref_name}_{comp_name}'
-        if delta_v_col in comp_df.columns:
-            delta_v = comp_df[delta_v_col].values
-        else:
-            delta_v = comp_df[f'Speed_{ref_name}'].values - comp_df[f'Speed_{comp_name}'].values
+        delta_v = comp_df['Delta_Speed_kmh'].values if 'Delta_Speed_kmh' in comp_df.columns else (comp_df[f'Speed_{ref_name}'].values - comp_df[f'Speed_{comp_name}'].values)
 
         points = np.array([x, y]).T.reshape(-1, 1, 2)
         segments = np.concatenate([points[:-1], points[1:]], axis=1)
@@ -153,20 +146,9 @@ class LapReportGenerator:
         dist_ref = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
         dist_comp = df_comp['Distance'].values if 'Distance' in df_comp.columns else np.arange(len(df_comp))
 
-        # Safe extraction for wheel power without unsafe .get().values calls
-        if 'Power_Wheels' in df_ref.columns:
-            p_ref = df_ref['Power_Wheels'].values
-        elif 'P_wheels_kW' in df_ref.columns:
-            p_ref = df_ref['P_wheels_kW'].values
-        else:
-            p_ref = np.zeros(len(df_ref))
-
-        if 'Power_Wheels' in df_comp.columns:
-            p_comp = df_comp['Power_Wheels'].values
-        elif 'P_wheels_kW' in df_comp.columns:
-            p_comp = df_comp['P_wheels_kW'].values
-        else:
-            p_comp = np.zeros(len(df_comp))
+        # Estrazione corretta da ERSAnalyzer (Power_Wheels_kW)
+        p_ref = df_ref['Power_Wheels_kW'].values if 'Power_Wheels_kW' in df_ref.columns else df_ref.get('Power_Wheels', np.zeros(len(df_ref))).values
+        p_comp = df_comp['Power_Wheels_kW'].values if 'Power_Wheels_kW' in df_comp.columns else df_comp.get('Power_Wheels', np.zeros(len(df_comp))).values
 
         clip_ref = df_ref['Is_Clipping'].values if 'Is_Clipping' in df_ref.columns else np.zeros(len(df_ref))
         clip_comp = df_comp['Is_Clipping'].values if 'Is_Clipping' in df_comp.columns else np.zeros(len(df_comp))
