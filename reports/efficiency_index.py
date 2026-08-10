@@ -71,13 +71,11 @@ class EfficiencyIndexAnalyzer:
         kpi_metrics : dict
             Dictionary of calculated performance efficiency metrics.
         """
-        # Flexible channel extraction to match previous pipeline outputs
-        if 'Fz_Aero_N' in df_processed.columns:
-            fz_aero = df_processed['Fz_Aero_N'].values
-        elif 'Fz_Aero' in df_processed.columns:
-            fz_aero = df_processed['Fz_Aero'].values
-        elif 'Fz_Downforce_N' in df_processed.columns:
+        # 1. Aero Downforce vs Drag extraction
+        if 'Fz_Downforce_N' in df_processed.columns:
             fz_aero = df_processed['Fz_Downforce_N'].values
+        elif 'Fz_Aero_N' in df_processed.columns:
+            fz_aero = df_processed['Fz_Aero_N'].values
         else:
             fz_aero = np.zeros(len(df_processed))
 
@@ -88,15 +86,21 @@ class EfficiencyIndexAnalyzer:
         else:
             fx_drag = np.ones(len(df_processed))
 
+        # 2. ERS Clipping state extraction
         if 'Is_Clipping' in df_processed.columns:
             is_clipping = df_processed['Is_Clipping'].values
         else:
             is_clipping = np.zeros(len(df_processed), dtype=bool)
 
+        # 3. Corrected Friction Utilization (Mu) extraction
+        # If Mu_Utilized in df was computed using G's instead of m/s^2, re-scale by g (9.81)
         if 'Mu_Utilized' in df_processed.columns:
-            mu_util = df_processed['Mu_Utilized'].values
-        elif 'Mu_Util' in df_processed.columns:
-            mu_util = df_processed['Mu_Util'].values
+            mu_raw = df_processed['Mu_Utilized'].values
+            # Check if values are unscaled (mean < 0.1) and apply gravity scaling
+            if np.nanmean(mu_raw) < 0.1 and np.nanmean(mu_raw) > 0:
+                mu_util = mu_raw * 9.81
+            else:
+                mu_util = mu_raw
         else:
             mu_util = np.zeros(len(df_processed))
 
@@ -165,9 +169,6 @@ if __name__ == "__main__":
 
     df_nor = process_driver_pipeline(session, 'NOR')
     df_ver = process_driver_pipeline(session, 'VER')
-
-    # Print columns once to verify exact name mapping if needed
-    print("\nProcessed DataFrame Channels:", list(df_nor.columns))
 
     analyzer = EfficiencyIndexAnalyzer(ds=1.0)
     kpi_nor = analyzer.analyze_lap_efficiency(df_nor, driver_name="NOR")
