@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 class LapReportGenerator:
     """
     Synthesizes comparison telemetry, physics KPIs, and spatial telemetry
-    into visual executive plots.
+    into visual executive plots (Telemetry Overlay, Track Dominance Map, GG Diagram, ERS Clipping, Aero Forces).
     """
 
     def __init__(self, output_dir: str = "reports/output"):
@@ -32,32 +32,33 @@ class LapReportGenerator:
 
     def generate_comparison_plot(self, comp_df: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "lap_comparison.png") -> str:
         fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1, 1, 1]})
-        distance = comp_df['Distance'].values
+        
+        dist_ref = comp_df['Distance'].values if 'Distance' in comp_df.columns else np.arange(len(comp_df))
 
         # Panel 1: Speed Overlay
-        axes[0].plot(distance, comp_df[f'Speed_{ref_name}'], label=f'{ref_name}', color='orange', linewidth=1.5)
-        axes[0].plot(distance, comp_df[f'Speed_{comp_name}'], label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
+        axes[0].plot(dist_ref, comp_df[f'Speed_{ref_name}'], label=f'{ref_name}', color='orange', linewidth=1.5)
+        axes[0].plot(dist_ref, comp_df[f'Speed_{comp_name}'], label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
         axes[0].set_ylabel("Speed [km/h]")
         axes[0].set_title(f"Executive Lap Comparison: {ref_name} vs {comp_name} (Monza 2025)", fontsize=12, fontweight='bold')
         axes[0].grid(True, linestyle=':', alpha=0.6)
         axes[0].legend(loc='upper right')
 
         # Panel 2: Accumulated Delta Time
-        axes[1].plot(distance, comp_df['Delta_Time_sec'], color='purple', linewidth=1.5)
+        axes[1].plot(dist_ref, comp_df['Delta_Time_sec'], color='purple', linewidth=1.5)
         axes[1].axhline(0, color='black', linestyle='--', alpha=0.5)
         axes[1].set_ylabel("Δt Accum. [s]")
         axes[1].grid(True, linestyle=':', alpha=0.6)
 
         # Panel 3: Throttle Position
-        axes[2].plot(distance, comp_df[f'Throttle_{ref_name}'], label=f'Throttle {ref_name}', color='orange', alpha=0.8)
-        axes[2].plot(distance, comp_df[f'Throttle_{comp_name}'], label=f'Throttle {comp_name}', color='blue', alpha=0.6, linestyle='--')
+        axes[2].plot(dist_ref, comp_df[f'Throttle_{ref_name}'], label=f'Throttle {ref_name}', color='orange', alpha=0.8)
+        axes[2].plot(dist_ref, comp_df[f'Throttle_{comp_name}'], label=f'Throttle {comp_name}', color='blue', alpha=0.6, linestyle='--')
         axes[2].set_ylabel("Throttle [%]")
         axes[2].grid(True, linestyle=':', alpha=0.6)
         axes[2].legend(loc='lower right')
 
         # Panel 4: Power at Wheels
-        axes[3].plot(distance, comp_df[f'Power_Wheels_{ref_name}'], label=f'P_wheels {ref_name}', color='orange', alpha=0.8)
-        axes[3].plot(distance, comp_df[f'Power_Wheels_{comp_name}'], label=f'P_wheels {comp_name}', color='blue', alpha=0.6, linestyle='--')
+        axes[3].plot(dist_ref, comp_df[f'Power_Wheels_{ref_name}'], label=f'P_wheels {ref_name}', color='orange', alpha=0.8)
+        axes[3].plot(dist_ref, comp_df[f'Power_Wheels_{comp_name}'], label=f'P_wheels {comp_name}', color='blue', alpha=0.6, linestyle='--')
         axes[3].set_ylabel("Wheel Power [kW]")
         axes[3].set_xlabel("Track Distance [m]")
         axes[3].grid(True, linestyle=':', alpha=0.6)
@@ -71,13 +72,22 @@ class LapReportGenerator:
         return save_path
 
     def generate_track_dominance_map(self, comp_df: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "track_dominance_map.png") -> str:
-        if 'X' not in comp_df.columns or 'Y' not in comp_df.columns:
-            logging.warning("GPS X, Y channels not found. Skipping Track Dominance Map.")
+        # Fallback sui nomi colonna formattati da TelemetryComparator
+        x_col = 'X' if 'X' in comp_df.columns else f'X_{ref_name}'
+        y_col = 'Y' if 'Y' in comp_df.columns else f'Y_{ref_name}'
+
+        if x_col not in comp_df.columns or y_col not in comp_df.columns:
+            logging.warning(f"GPS coordinates ({x_col}, {y_col}) not found in DataFrame. Skipping Track Dominance Map generation.")
             return ""
 
-        x = comp_df['X'].values
-        y = comp_df['Y'].values
-        delta_v = comp_df[f'Delta_Speed_kmh'].values
+        x = comp_df[x_col].values
+        y = comp_df[y_col].values
+
+        delta_v_col = 'Delta_Speed_kmh' if 'Delta_Speed_kmh' in comp_df.columns else f'Speed_Delta_{ref_name}_{comp_name}'
+        if delta_v_col in comp_df.columns:
+            delta_v = comp_df[delta_v_col].values
+        else:
+            delta_v = comp_df[f'Speed_{ref_name}'].values - comp_df[f'Speed_{comp_name}'].values
 
         points = np.array([x, y]).T.reshape(-1, 1, 2)
         segments = np.concatenate([points[:-1], points[1:]], axis=1)
@@ -88,6 +98,7 @@ class LapReportGenerator:
 
         lc = LineCollection(segments, cmap=cmap, norm=norm, linewidth=4)
         lc.set_array(delta_v)
+
         line = ax.add_collection(lc)
         cbar = fig.colorbar(line, ax=ax, ticks=[-15, 0, 15], orientation='horizontal', pad=0.05, shrink=0.7)
         cbar.ax.set_xticklabels([f'{comp_name} Faster (>1.5 km/h)', 'Equal Speed (±1.5 km/h)', f'{ref_name} Faster (>1.5 km/h)'])
@@ -132,17 +143,14 @@ class LapReportGenerator:
         return save_path
 
     def generate_ers_clipping_plot(self, df_ref: pd.DataFrame, df_comp: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "ers_clipping_analysis.png") -> str:
-        """
-        Generates ERS Deployment & Clipping Overlay Plot across track distance.
-        """
         fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
         
-        # Extract individual distance arrays to handle dimension mismatch
         dist_ref = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
         dist_comp = df_comp['Distance'].values if 'Distance' in df_comp.columns else np.arange(len(df_comp))
 
-        p_ref = df_ref['P_wheels_kW'].values if 'P_wheels_kW' in df_ref.columns else np.zeros(len(df_ref))
-        p_comp = df_comp['P_wheels_kW'].values if 'P_wheels_kW' in df_comp.columns else np.zeros(len(df_comp))
+        # Fix channel name lookup (fallback to Power_Wheels)
+        p_ref = df_ref['Power_Wheels'].values if 'Power_Wheels' in df_ref.columns else df_ref.get('P_wheels_kW', np.zeros(len(df_ref))).values
+        p_comp = df_comp['Power_Wheels'].values if 'Power_Wheels' in df_comp.columns else df_comp.get('P_wheels_kW', np.zeros(len(df_comp))).values
 
         clip_ref = df_ref['Is_Clipping'].values if 'Is_Clipping' in df_ref.columns else np.zeros(len(df_ref))
         clip_comp = df_comp['Is_Clipping'].values if 'Is_Clipping' in df_comp.columns else np.zeros(len(df_comp))
@@ -173,12 +181,8 @@ class LapReportGenerator:
         return save_path
 
     def generate_aero_forces_plot(self, df_ref: pd.DataFrame, df_comp: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "aero_forces_comparison.png") -> str:
-        """
-        Generates Downforce (Fz) and Drag Force (Fx) spatial trace overlay plot.
-        """
         fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
         
-        # Extract individual distance arrays to handle dimension mismatch
         dist_ref = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
         dist_comp = df_comp['Distance'].values if 'Distance' in df_comp.columns else np.arange(len(df_comp))
 
@@ -300,7 +304,6 @@ if __name__ == "__main__":
     kpi_nor = efficiency.analyze_lap_efficiency(df_nor, driver_name="NOR")
     kpi_ver = efficiency.analyze_lap_efficiency(df_ver, driver_name="VER")
 
-    # Generate all 5 executive plots
     reporter = LapReportGenerator()
     p1 = reporter.generate_comparison_plot(comp_df, ref_name="NOR", comp_name="VER")
     p2 = reporter.generate_track_dominance_map(comp_df, ref_name="NOR", comp_name="VER")
@@ -314,9 +317,9 @@ if __name__ == "__main__":
     print(" ALL 5 EXECUTIVE REPORTS GENERATED")
     print("==========================================")
     print(f"1. Telemetry Overlay Plot: {p1}")
-    print(f"2. Track Dominance Map:     {p2}")
-    print(f"3. GG Diagram Plot:        {p3}")
-    print(f"4. ERS Clipping Plot:      {p4}")
-    print(f"5. Aero Forces Plot:        {p5}")
+    print(f"2. Track Dominance Map:    {p2}")
+    print(f"3. GG Diagram Plot:       {p3}")
+    print(f"4. ERS Clipping Plot:     {p4}")
+    print(f"5. Aero Forces Plot:       {p5}")
     print("\nExecutive Summary Table:")
     print(summary_table.to_string(index=False))
