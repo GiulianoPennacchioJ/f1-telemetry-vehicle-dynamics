@@ -136,7 +136,10 @@ class LapReportGenerator:
         Generates ERS Deployment & Clipping Overlay Plot across track distance.
         """
         fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
-        distance = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
+        
+        # Extract individual distance arrays to handle dimension mismatch
+        dist_ref = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
+        dist_comp = df_comp['Distance'].values if 'Distance' in df_comp.columns else np.arange(len(df_comp))
 
         p_ref = df_ref['P_wheels_kW'].values if 'P_wheels_kW' in df_ref.columns else np.zeros(len(df_ref))
         p_comp = df_comp['P_wheels_kW'].values if 'P_wheels_kW' in df_comp.columns else np.zeros(len(df_comp))
@@ -145,17 +148,17 @@ class LapReportGenerator:
         clip_comp = df_comp['Is_Clipping'].values if 'Is_Clipping' in df_comp.columns else np.zeros(len(df_comp))
 
         # Panel 1: Power at Wheels
-        axes[0].plot(distance, p_ref, label=f'{ref_name}', color='orange', linewidth=1.5)
-        axes[0].plot(distance, p_comp, label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
+        axes[0].plot(dist_ref, p_ref, label=f'{ref_name}', color='orange', linewidth=1.5)
+        axes[0].plot(dist_comp, p_comp, label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
         axes[0].set_ylabel("Power at Wheels [kW]")
         axes[0].set_title(f"ERS Deployment & Clipping Analysis: {ref_name} vs {comp_name}", fontsize=12, fontweight='bold')
         axes[0].grid(True, linestyle=':', alpha=0.6)
         axes[0].legend(loc='upper right')
 
         # Panel 2: Clipping State Flag
-        axes[1].fill_between(distance, 0, clip_ref.astype(int), color='orange', alpha=0.5, label=f'Clipping {ref_name}')
-        axes[1].fill_between(distance, 0, clip_comp.astype(int), color='blue', alpha=0.3, label=f'Clipping {comp_name}')
-        axes[1].set_ylabel("Clipping State [Boolean]")
+        axes[1].fill_between(dist_ref, 0, clip_ref.astype(int), color='orange', alpha=0.5, label=f'Clipping {ref_name}')
+        axes[1].fill_between(dist_comp, 0, clip_comp.astype(int), color='blue', alpha=0.3, label=f'Clipping {comp_name}')
+        axes[1].set_ylabel("Clipping State")
         axes[1].set_xlabel("Track Distance [m]")
         axes[1].set_yticks([0, 1])
         axes[1].set_yticklabels(['Deploying', 'Clipping'])
@@ -174,7 +177,10 @@ class LapReportGenerator:
         Generates Downforce (Fz) and Drag Force (Fx) spatial trace overlay plot.
         """
         fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
-        distance = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
+        
+        # Extract individual distance arrays to handle dimension mismatch
+        dist_ref = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
+        dist_comp = df_comp['Distance'].values if 'Distance' in df_comp.columns else np.arange(len(df_comp))
 
         fz_ref = df_ref['Fz_Downforce_N'].values if 'Fz_Downforce_N' in df_ref.columns else np.zeros(len(df_ref))
         fz_comp = df_comp['Fz_Downforce_N'].values if 'Fz_Downforce_N' in df_comp.columns else np.zeros(len(df_comp))
@@ -183,16 +189,16 @@ class LapReportGenerator:
         fx_comp = df_comp['Fx_Drag_N'].values if 'Fx_Drag_N' in df_comp.columns else np.zeros(len(df_comp))
 
         # Panel 1: Downforce
-        axes[0].plot(distance, fz_ref, label=f'{ref_name}', color='orange', linewidth=1.5)
-        axes[0].plot(distance, fz_comp, label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
+        axes[0].plot(dist_ref, fz_ref, label=f'{ref_name}', color='orange', linewidth=1.5)
+        axes[0].plot(dist_comp, fz_comp, label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
         axes[0].set_ylabel("Downforce Fz [N]")
         axes[0].set_title(f"Aerodynamic Loads Comparison: {ref_name} vs {comp_name}", fontsize=12, fontweight='bold')
         axes[0].grid(True, linestyle=':', alpha=0.6)
         axes[0].legend(loc='upper right')
 
         # Panel 2: Drag
-        axes[1].plot(distance, fx_ref, label=f'{ref_name}', color='orange', linewidth=1.5)
-        axes[1].plot(distance, fx_comp, label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
+        axes[1].plot(dist_ref, fx_ref, label=f'{ref_name}', color='orange', linewidth=1.5)
+        axes[1].plot(dist_comp, fx_comp, label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
         axes[1].set_ylabel("Aero Drag Fx [N]")
         axes[1].set_xlabel("Track Distance [m]")
         axes[1].grid(True, linestyle=':', alpha=0.6)
