@@ -11,6 +11,8 @@ if str(PROJECT_ROOT) not in sys.path:
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
+from matplotlib.colors import ListedColormap, BoundaryNorm
 
 from reports.telemetry_comparator import TelemetryComparator
 from reports.efficiency_index import EfficiencyIndexAnalyzer
@@ -20,25 +22,16 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 class LapReportGenerator:
     """
-    Synthesizes comparison telemetry and performance KPIs into executive visual reports and summary plots.
+    Synthesizes comparison telemetry, physics KPIs, and spatial telemetry
+    into visual executive plots.
     """
 
     def __init__(self, output_dir: str = "reports/output"):
-        """
-        Parameters:
-        -----------
-        output_dir : str
-            Directory path to save generated plots and reports.
-        """
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
     def generate_comparison_plot(self, comp_df: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "lap_comparison.png") -> str:
-        """
-        Generates a multi-panel spatial telemetry trace overlay plot.
-        """
         fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1, 1, 1]})
-
         distance = comp_df['Distance'].values
 
         # Panel 1: Speed Overlay
@@ -55,7 +48,7 @@ class LapReportGenerator:
         axes[1].set_ylabel("Δt Accum. [s]")
         axes[1].grid(True, linestyle=':', alpha=0.6)
 
-        # Panel 3: Pedal Inputs (Throttle)
+        # Panel 3: Throttle Position
         axes[2].plot(distance, comp_df[f'Throttle_{ref_name}'], label=f'Throttle {ref_name}', color='orange', alpha=0.8)
         axes[2].plot(distance, comp_df[f'Throttle_{comp_name}'], label=f'Throttle {comp_name}', color='blue', alpha=0.6, linestyle='--')
         axes[2].set_ylabel("Throttle [%]")
@@ -74,14 +67,145 @@ class LapReportGenerator:
         save_path = os.path.join(self.output_dir, save_filename)
         plt.savefig(save_path, dpi=300)
         plt.close()
+        logging.info(f"Comparison plot saved to: {save_path}")
+        return save_path
 
-        logging.info(f"Comparison plot saved successfully to: {save_path}")
+    def generate_track_dominance_map(self, comp_df: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "track_dominance_map.png") -> str:
+        if 'X' not in comp_df.columns or 'Y' not in comp_df.columns:
+            logging.warning("GPS X, Y channels not found. Skipping Track Dominance Map.")
+            return ""
+
+        x = comp_df['X'].values
+        y = comp_df['Y'].values
+        delta_v = comp_df[f'Delta_Speed_kmh'].values
+
+        points = np.array([x, y]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+        cmap = ListedColormap(['#0055ff', '#cccccc', '#ff8700'])
+        norm = BoundaryNorm([-30.0, -1.5, 1.5, 30.0], cmap.N)
+
+        lc = LineCollection(segments, cmap=cmap, norm=norm, linewidth=4)
+        lc.set_array(delta_v)
+        line = ax.add_collection(lc)
+        cbar = fig.colorbar(line, ax=ax, ticks=[-15, 0, 15], orientation='horizontal', pad=0.05, shrink=0.7)
+        cbar.ax.set_xticklabels([f'{comp_name} Faster (>1.5 km/h)', 'Equal Speed (±1.5 km/h)', f'{ref_name} Faster (>1.5 km/h)'])
+
+        ax.set_title(f"Track Speed Dominance Map: {ref_name} vs {comp_name}", fontsize=12, fontweight='bold')
+        ax.axis('equal')
+        ax.axis('off')
+
+        plt.tight_layout()
+        save_path = os.path.join(self.output_dir, save_filename)
+        plt.savefig(save_path, dpi=300)
+        plt.close()
+        logging.info(f"Track dominance map saved to: {save_path}")
+        return save_path
+
+    def generate_gg_diagram_plot(self, df_ref: pd.DataFrame, df_comp: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "gg_diagram_comparison.png") -> str:
+        fig, ax = plt.subplots(figsize=(8, 8))
+
+        ax_ref = df_ref['a_x'].values if 'a_x' in df_ref.columns else np.zeros(len(df_ref))
+        ay_ref = df_ref['a_y'].values if 'a_y' in df_ref.columns else np.zeros(len(df_ref))
+        ax_comp = df_comp['a_x'].values if 'a_x' in df_comp.columns else np.zeros(len(df_comp))
+        ay_comp = df_comp['a_y'].values if 'a_y' in df_comp.columns else np.zeros(len(df_comp))
+
+        ax.scatter(ay_ref, ax_ref, color='orange', alpha=0.3, s=10, label=f'{ref_name}')
+        ax.scatter(ay_comp, ax_comp, color='blue', alpha=0.2, s=10, label=f'{comp_name}')
+
+        ax.axhline(0, color='black', linestyle='--', alpha=0.6)
+        ax.axvline(0, color='black', linestyle='--', alpha=0.6)
+        ax.set_xlabel("Lateral Acceleration a_y [G]")
+        ax.set_ylabel("Longitudinal Acceleration a_x [G]")
+        ax.set_title(f"GG Diagram Friction Utilization: {ref_name} vs {comp_name}", fontsize=12, fontweight='bold')
+        ax.grid(True, linestyle=':', alpha=0.6)
+        ax.legend(loc='upper right')
+        ax.set_xlim(-6.0, 6.0)
+        ax.set_ylim(-6.0, 3.0)
+
+        plt.tight_layout()
+        save_path = os.path.join(self.output_dir, save_filename)
+        plt.savefig(save_path, dpi=300)
+        plt.close()
+        logging.info(f"GG Diagram plot saved to: {save_path}")
+        return save_path
+
+    def generate_ers_clipping_plot(self, df_ref: pd.DataFrame, df_comp: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "ers_clipping_analysis.png") -> str:
+        """
+        Generates ERS Deployment & Clipping Overlay Plot across track distance.
+        """
+        fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
+        distance = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
+
+        p_ref = df_ref['P_wheels_kW'].values if 'P_wheels_kW' in df_ref.columns else np.zeros(len(df_ref))
+        p_comp = df_comp['P_wheels_kW'].values if 'P_wheels_kW' in df_comp.columns else np.zeros(len(df_comp))
+
+        clip_ref = df_ref['Is_Clipping'].values if 'Is_Clipping' in df_ref.columns else np.zeros(len(df_ref))
+        clip_comp = df_comp['Is_Clipping'].values if 'Is_Clipping' in df_comp.columns else np.zeros(len(df_comp))
+
+        # Panel 1: Power at Wheels
+        axes[0].plot(distance, p_ref, label=f'{ref_name}', color='orange', linewidth=1.5)
+        axes[0].plot(distance, p_comp, label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
+        axes[0].set_ylabel("Power at Wheels [kW]")
+        axes[0].set_title(f"ERS Deployment & Clipping Analysis: {ref_name} vs {comp_name}", fontsize=12, fontweight='bold')
+        axes[0].grid(True, linestyle=':', alpha=0.6)
+        axes[0].legend(loc='upper right')
+
+        # Panel 2: Clipping State Flag
+        axes[1].fill_between(distance, 0, clip_ref.astype(int), color='orange', alpha=0.5, label=f'Clipping {ref_name}')
+        axes[1].fill_between(distance, 0, clip_comp.astype(int), color='blue', alpha=0.3, label=f'Clipping {comp_name}')
+        axes[1].set_ylabel("Clipping State [Boolean]")
+        axes[1].set_xlabel("Track Distance [m]")
+        axes[1].set_yticks([0, 1])
+        axes[1].set_yticklabels(['Deploying', 'Clipping'])
+        axes[1].grid(True, linestyle=':', alpha=0.6)
+        axes[1].legend(loc='upper right')
+
+        plt.tight_layout()
+        save_path = os.path.join(self.output_dir, save_filename)
+        plt.savefig(save_path, dpi=300)
+        plt.close()
+        logging.info(f"ERS Clipping plot saved to: {save_path}")
+        return save_path
+
+    def generate_aero_forces_plot(self, df_ref: pd.DataFrame, df_comp: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "aero_forces_comparison.png") -> str:
+        """
+        Generates Downforce (Fz) and Drag Force (Fx) spatial trace overlay plot.
+        """
+        fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
+        distance = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
+
+        fz_ref = df_ref['Fz_Downforce_N'].values if 'Fz_Downforce_N' in df_ref.columns else np.zeros(len(df_ref))
+        fz_comp = df_comp['Fz_Downforce_N'].values if 'Fz_Downforce_N' in df_comp.columns else np.zeros(len(df_comp))
+
+        fx_ref = df_ref['Fx_Drag_N'].values if 'Fx_Drag_N' in df_ref.columns else np.zeros(len(df_ref))
+        fx_comp = df_comp['Fx_Drag_N'].values if 'Fx_Drag_N' in df_comp.columns else np.zeros(len(df_comp))
+
+        # Panel 1: Downforce
+        axes[0].plot(distance, fz_ref, label=f'{ref_name}', color='orange', linewidth=1.5)
+        axes[0].plot(distance, fz_comp, label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
+        axes[0].set_ylabel("Downforce Fz [N]")
+        axes[0].set_title(f"Aerodynamic Loads Comparison: {ref_name} vs {comp_name}", fontsize=12, fontweight='bold')
+        axes[0].grid(True, linestyle=':', alpha=0.6)
+        axes[0].legend(loc='upper right')
+
+        # Panel 2: Drag
+        axes[1].plot(distance, fx_ref, label=f'{ref_name}', color='orange', linewidth=1.5)
+        axes[1].plot(distance, fx_comp, label=f'{comp_name}', color='blue', linewidth=1.5, linestyle='--')
+        axes[1].set_ylabel("Aero Drag Fx [N]")
+        axes[1].set_xlabel("Track Distance [m]")
+        axes[1].grid(True, linestyle=':', alpha=0.6)
+        axes[1].legend(loc='upper right')
+
+        plt.tight_layout()
+        save_path = os.path.join(self.output_dir, save_filename)
+        plt.savefig(save_path, dpi=300)
+        plt.close()
+        logging.info(f"Aero forces plot saved to: {save_path}")
         return save_path
 
     def build_executive_summary(self, comp_df: pd.DataFrame, kpi_ref: dict, kpi_comp: dict) -> pd.DataFrame:
-        """
-        Builds a structured executive summary table comparing two drivers.
-        """
         ref_name = kpi_ref['Driver']
         comp_name = kpi_comp['Driver']
 
@@ -163,7 +287,6 @@ if __name__ == "__main__":
     df_nor = process_driver_pipeline(session, 'NOR')
     df_ver = process_driver_pipeline(session, 'VER')
 
-    # Execute comparison and KPI pipeline
     comparator = TelemetryComparator(driver_ref_name="NOR", driver_comp_name="VER")
     comp_df = comparator.compare_laps(df_nor, df_ver)
 
@@ -171,14 +294,23 @@ if __name__ == "__main__":
     kpi_nor = efficiency.analyze_lap_efficiency(df_nor, driver_name="NOR")
     kpi_ver = efficiency.analyze_lap_efficiency(df_ver, driver_name="VER")
 
-    # Generate visual report and summary table
+    # Generate all 5 executive plots
     reporter = LapReportGenerator()
-    plot_file = reporter.generate_comparison_plot(comp_df, ref_name="NOR", comp_name="VER")
+    p1 = reporter.generate_comparison_plot(comp_df, ref_name="NOR", comp_name="VER")
+    p2 = reporter.generate_track_dominance_map(comp_df, ref_name="NOR", comp_name="VER")
+    p3 = reporter.generate_gg_diagram_plot(df_nor, df_ver, ref_name="NOR", comp_name="VER")
+    p4 = reporter.generate_ers_clipping_plot(df_nor, df_ver, ref_name="NOR", comp_name="VER")
+    p5 = reporter.generate_aero_forces_plot(df_nor, df_ver, ref_name="NOR", comp_name="VER")
+    
     summary_table = reporter.build_executive_summary(comp_df, kpi_nor, kpi_ver)
 
     print("\n==========================================")
-    print(" EXECUTIVE LAP REPORT GENERATED")
+    print(" ALL 5 EXECUTIVE REPORTS GENERATED")
     print("==========================================")
-    print(f"Plot saved at: {plot_file}")
+    print(f"1. Telemetry Overlay Plot: {p1}")
+    print(f"2. Track Dominance Map:     {p2}")
+    print(f"3. GG Diagram Plot:        {p3}")
+    print(f"4. ERS Clipping Plot:      {p4}")
+    print(f"5. Aero Forces Plot:        {p5}")
     print("\nExecutive Summary Table:")
     print(summary_table.to_string(index=False))
