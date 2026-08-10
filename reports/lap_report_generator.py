@@ -57,8 +57,14 @@ class LapReportGenerator:
         axes[2].legend(loc='lower right')
 
         # Panel 4: Power at Wheels
-        axes[3].plot(dist_ref, comp_df[f'Power_Wheels_{ref_name}'], label=f'P_wheels {ref_name}', color='orange', alpha=0.8)
-        axes[3].plot(dist_ref, comp_df[f'Power_Wheels_{comp_name}'], label=f'P_wheels {comp_name}', color='blue', alpha=0.6, linestyle='--')
+        p_col_ref = f'Power_Wheels_{ref_name}' if f'Power_Wheels_{ref_name}' in comp_df.columns else f'P_wheels_kW_{ref_name}'
+        p_col_comp = f'Power_Wheels_{comp_name}' if f'Power_Wheels_{comp_name}' in comp_df.columns else f'P_wheels_kW_{comp_name}'
+        
+        p_ref_vals = comp_df[p_col_ref].values if p_col_ref in comp_df.columns else np.zeros(len(comp_df))
+        p_comp_vals = comp_df[p_col_comp].values if p_col_comp in comp_df.columns else np.zeros(len(comp_df))
+
+        axes[3].plot(dist_ref, p_ref_vals, label=f'P_wheels {ref_name}', color='orange', alpha=0.8)
+        axes[3].plot(dist_ref, p_comp_vals, label=f'P_wheels {comp_name}', color='blue', alpha=0.6, linestyle='--')
         axes[3].set_ylabel("Wheel Power [kW]")
         axes[3].set_xlabel("Track Distance [m]")
         axes[3].grid(True, linestyle=':', alpha=0.6)
@@ -72,7 +78,6 @@ class LapReportGenerator:
         return save_path
 
     def generate_track_dominance_map(self, comp_df: pd.DataFrame, ref_name: str = "NOR", comp_name: str = "VER", save_filename: str = "track_dominance_map.png") -> str:
-        # Fallback sui nomi colonna formattati da TelemetryComparator
         x_col = 'X' if 'X' in comp_df.columns else f'X_{ref_name}'
         y_col = 'Y' if 'Y' in comp_df.columns else f'Y_{ref_name}'
 
@@ -148,9 +153,20 @@ class LapReportGenerator:
         dist_ref = df_ref['Distance'].values if 'Distance' in df_ref.columns else np.arange(len(df_ref))
         dist_comp = df_comp['Distance'].values if 'Distance' in df_comp.columns else np.arange(len(df_comp))
 
-        # Fix channel name lookup (fallback to Power_Wheels)
-        p_ref = df_ref['Power_Wheels'].values if 'Power_Wheels' in df_ref.columns else df_ref.get('P_wheels_kW', np.zeros(len(df_ref))).values
-        p_comp = df_comp['Power_Wheels'].values if 'Power_Wheels' in df_comp.columns else df_comp.get('P_wheels_kW', np.zeros(len(df_comp))).values
+        # Safe extraction for wheel power without unsafe .get().values calls
+        if 'Power_Wheels' in df_ref.columns:
+            p_ref = df_ref['Power_Wheels'].values
+        elif 'P_wheels_kW' in df_ref.columns:
+            p_ref = df_ref['P_wheels_kW'].values
+        else:
+            p_ref = np.zeros(len(df_ref))
+
+        if 'Power_Wheels' in df_comp.columns:
+            p_comp = df_comp['Power_Wheels'].values
+        elif 'P_wheels_kW' in df_comp.columns:
+            p_comp = df_comp['P_wheels_kW'].values
+        else:
+            p_comp = np.zeros(len(df_comp))
 
         clip_ref = df_ref['Is_Clipping'].values if 'Is_Clipping' in df_ref.columns else np.zeros(len(df_ref))
         clip_comp = df_comp['Is_Clipping'].values if 'Is_Clipping' in df_comp.columns else np.zeros(len(df_comp))

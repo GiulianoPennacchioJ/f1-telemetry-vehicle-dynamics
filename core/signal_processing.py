@@ -78,8 +78,8 @@ class SignalProcessor:
             dy_ds = savgol_filter(y, self.window_length, self.poly_order, deriv=1, delta=step_size)
             ddy_ds2 = savgol_filter(y, self.window_length, self.poly_order, deriv=2, delta=step_size)
 
-            # Menger curvature formulation
-            numerator = np.abs(dx_ds * ddy_ds2 - dy_ds * ddx_ds2)
+            # Menger curvature formulation (Rimosso np.abs per preservare il segno della curva!)
+            numerator = (dx_ds * ddy_ds2 - dy_ds * ddx_ds2)
             denominator = np.power(dx_ds**2 + dy_ds**2, 1.5)
             
             # Avoid division by zero on straightaways
