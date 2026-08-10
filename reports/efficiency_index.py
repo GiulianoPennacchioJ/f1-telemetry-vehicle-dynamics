@@ -71,10 +71,34 @@ class EfficiencyIndexAnalyzer:
         kpi_metrics : dict
             Dictionary of calculated performance efficiency metrics.
         """
-        fz_aero = df_processed['Fz_Aero_N'].values if 'Fz_Aero_N' in df_processed.columns else np.zeros(len(df_processed))
-        fx_drag = df_processed['Fx_Drag_N'].values if 'Fx_Drag_N' in df_processed.columns else np.ones(len(df_processed))
-        is_clipping = df_processed['Is_Clipping'].values if 'Is_Clipping' in df_processed.columns else np.zeros(len(df_processed), dtype=bool)
-        mu_util = df_processed['Mu_Utilized'].values if 'Mu_Utilized' in df_processed.columns else np.zeros(len(df_processed))
+        # Flexible channel extraction to match previous pipeline outputs
+        if 'Fz_Aero_N' in df_processed.columns:
+            fz_aero = df_processed['Fz_Aero_N'].values
+        elif 'Fz_Aero' in df_processed.columns:
+            fz_aero = df_processed['Fz_Aero'].values
+        elif 'Fz_Downforce_N' in df_processed.columns:
+            fz_aero = df_processed['Fz_Downforce_N'].values
+        else:
+            fz_aero = np.zeros(len(df_processed))
+
+        if 'Fx_Drag_N' in df_processed.columns:
+            fx_drag = df_processed['Fx_Drag_N'].values
+        elif 'Fx_Drag' in df_processed.columns:
+            fx_drag = df_processed['Fx_Drag'].values
+        else:
+            fx_drag = np.ones(len(df_processed))
+
+        if 'Is_Clipping' in df_processed.columns:
+            is_clipping = df_processed['Is_Clipping'].values
+        else:
+            is_clipping = np.zeros(len(df_processed), dtype=bool)
+
+        if 'Mu_Utilized' in df_processed.columns:
+            mu_util = df_processed['Mu_Utilized'].values
+        elif 'Mu_Util' in df_processed.columns:
+            mu_util = df_processed['Mu_Util'].values
+        else:
+            mu_util = np.zeros(len(df_processed))
 
         aero_efficiency = self.compute_aero_efficiency(fz_aero, fx_drag)
         clip_dist_m, clip_ratio_pct = self.compute_clipping_ratio(is_clipping)
@@ -141,6 +165,9 @@ if __name__ == "__main__":
 
     df_nor = process_driver_pipeline(session, 'NOR')
     df_ver = process_driver_pipeline(session, 'VER')
+
+    # Print columns once to verify exact name mapping if needed
+    print("\nProcessed DataFrame Channels:", list(df_nor.columns))
 
     analyzer = EfficiencyIndexAnalyzer(ds=1.0)
     kpi_nor = analyzer.analyze_lap_efficiency(df_nor, driver_name="NOR")
