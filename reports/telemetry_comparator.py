@@ -83,6 +83,8 @@ class TelemetryComparator:
         # Build combined comparative DataFrame
         comp_df = pd.DataFrame({
             'Distance': ref['Distance'].values,
+            'X': ref.get('X', np.nan),  # <-- Aggiunto passaggio coordinata X
+            'Y': ref.get('Y', np.nan),  # <-- Aggiunto passaggio coordinata Y
             f'Speed_{self.ref_name}': v_ref_kmh,
             f'Speed_{self.comp_name}': v_comp_kmh,
             'Delta_Speed_kmh': delta_v_kmh,
