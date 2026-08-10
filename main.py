@@ -1,10 +1,26 @@
 import os
+import sys
 import logging
-from core import F1DataLoader, SpatialResampler, SignalProcessor
-from physics import AeroModel, TireModel, GGDiagramAnalyzer, ERSAnalyzer, DRSAnalyzer
-from reports import TelemetryComparator, LapReportGenerator
+from pathlib import Path
 
-# Configure logging format and standard log level
+# Add project root directory to sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
+from core.data_loader import F1DataLoader
+from core.spatial_resampler import SpatialResampler
+from core.signal_processing import SignalProcessor
+from physics.aero_model import AeroModel
+from physics.tire_model import TireModel
+from physics.gg_diagram import GGDiagramAnalyzer
+from physics.ers_analyzer import ERSAnalyzer
+from physics.drs_analyzer import DRSAnalyzer
+from reports.telemetry_comparator import TelemetryComparator
+from reports.efficiency_index import EfficiencyIndexAnalyzer
+from reports.lap_report_generator import LapReportGenerator
+
+# Configure standard logger
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
@@ -22,36 +38,36 @@ def run_driver_pipeline(session, driver_code: str, config_path: str):
     """
     logging.info(f"--- Processing Telemetry Pipeline for Driver: {driver_code} ---")
     
-    # Extract raw lap telemetry
+    # Step 0: Extract raw telemetry
     loader = F1DataLoader()
     lap = loader.get_driver_fastest_lap(session, driver_code)
     raw_df = loader.extract_raw_telemetry(lap)
 
-    # 1. Spatial Resampling (Δs = 1.0 m uniform spatial grid)
+    # Step 1: Spatial Resampling (Δs = 1.0 m uniform spatial grid)
     resampler = SpatialResampler(step_size_meters=1.0)
     spatial_df = resampler.resample_lap(raw_df)
 
-    # 2. Kinematics Computation & Savitzky-Golay Filtering
+    # Step 2: Kinematics Computation & Savitzky-Golay Filtering
     processor = SignalProcessor(window_length=15, poly_order=3)
     kinematic_df = processor.compute_kinematics(spatial_df)
 
-    # 3. Aerodynamics Force Estimation (Downforce Fz, Aero Drag Fx, L/D ratio)
+    # Step 3: Aerodynamics Force Estimation (Downforce Fz, Aero Drag Fx)
     aero = AeroModel(config_path=config_path)
     aero_df = aero.process_telemetry_aero(kinematic_df)
 
-    # 4. Tire Model & Friction Coefficient Utilization
+    # Step 4: Tire Model & Friction Coefficient Utilization
     tire = TireModel(config_path=config_path)
     tire_df = tire.process_telemetry_tires(aero_df)
 
-    # 5. GG Diagram Acceleration & Friction Circle Analysis
+    # Step 5: GG Diagram Acceleration & Friction Circle Analysis
     gg = GGDiagramAnalyzer()
     gg_df, _ = gg.process_telemetry_gg(tire_df)
 
-    # 6. ERS MGU-K Power & Clipping State Identification
+    # Step 6: ERS MGU-K Power & Clipping State Identification
     ers = ERSAnalyzer(config_path=config_path)
     ers_df = ers.process_telemetry_ers(gg_df)
 
-    # 7. DRS Status Evaluation
+    # Step 7: DRS Status Evaluation
     drs = DRSAnalyzer(config_path=config_path)
     final_df, _ = drs.process_telemetry_drs(ers_df)
 
@@ -71,23 +87,28 @@ def main():
     # Ensure output destination directory exists
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # Step 1: Load F1 Qualifying Session via FastF1
+    # Step 1: Load F1 Session via FastF1
     loader = F1DataLoader()
     session = loader.load_session(YEAR, LOCATION, SESSION_TYPE)
 
-    # Step 2: Execute physics and kinematics pipelines for reference and comparative drivers
+    # Step 2: Execute physics and kinematics pipelines for both drivers
     df_ref = run_driver_pipeline(session, REF_DRIVER, CONFIG_PATH)
     df_comp = run_driver_pipeline(session, COMP_DRIVER, CONFIG_PATH)
 
-    # Step 3: Compare telemetry channels and construct differential dataframe (comp_df)
+    # Step 3: Compare telemetry channels and construct comparative dataframe
     comparator = TelemetryComparator(driver_ref_name=REF_DRIVER, driver_comp_name=COMP_DRIVER)
     comp_df = comparator.compare_laps(df_ref, df_comp)
 
-    # Step 4: Generate Executive Performance Reports (Direct Method Calls)
+    # Step 4: Compute Executive KPIs & Efficiency Metrics
+    efficiency = EfficiencyIndexAnalyzer(ds=1.0)
+    kpi_ref = efficiency.analyze_lap_efficiency(df_ref, driver_name=REF_DRIVER)
+    kpi_comp = efficiency.analyze_lap_efficiency(df_comp, driver_name=COMP_DRIVER)
+
+    # Step 5: Generate Visual Reports via LapReportGenerator
     report_gen = LapReportGenerator(output_dir=OUTPUT_DIR)
     
     generated_files = {
-        "1. Telemetry Overlay Plot": report_gen.generate_telemetry_overlay(
+        "1. Telemetry Overlay Plot": report_gen.generate_comparison_plot(
             comp_df, ref_name=REF_DRIVER, comp_name=COMP_DRIVER
         ),
         "2. Track Dominance Map": report_gen.generate_track_dominance_map(
@@ -104,12 +125,18 @@ def main():
         )
     }
 
-    # Step 5: Output execution status summary
+    # Step 6: Generate Executive Summary Table
+    summary_table = report_gen.build_executive_summary(comp_df, kpi_ref, kpi_comp)
+
+    # Step 7: Print Execution Summary to Console
     print("\n==========================================")
-    print(" ALL EXECUTIVE REPORTS GENERATED SUCCESSFULLY")
+    print(" ALL 5 EXECUTIVE REPORTS GENERATED SUCCESSFULLY")
     print("==========================================")
     for report_name, path in generated_files.items():
         print(f"{report_name}: {path}")
+        
+    print("\nExecutive Summary Table:")
+    print(summary_table.to_string(index=False))
 
 
 if __name__ == "__main__":
